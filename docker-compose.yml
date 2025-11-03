@@ -1,6 +1,17 @@
 version: '3.9'
 
 services:
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth
+      - products
+      - orders
   db_auth:
     image: postgres:15
     restart: always
@@ -20,15 +31,75 @@ services:
 
   auth:
     build: ./services/auth
+    restart: always
     ports:
       - "8000:8000"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: toor
       POSTGRES_DB: ecommerce-auth
+      POSTGRES_HOST: db_auth
     depends_on:
       db_auth:
         condition: service_healthy
 
+  mongo_orders:
+    image: mongo:7
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_orders_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  orders:
+    build: ./services/orders
+    restart: always
+    ports:
+      - "8001:8001"
+    environment:
+      MONGO_URL: mongodb://mongo_orders:27017
+      MONGO_DB: ecommerce-orders
+    depends_on:
+      mongo_orders:
+        condition: service_healthy
+
+  db_products:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: toor
+      POSTGRES_DB: ecommerce-products
+    ports:
+      - "5433:5432"
+    volumes:
+      - products_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  products:
+    build: ./services/products
+    restart: always
+    ports:
+      - "8002:8002"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: toor
+      POSTGRES_DB: ecommerce-products
+      POSTGRES_HOST: db_products
+    depends_on:
+      db_products:
+        condition: service_healthy
+
 volumes:
   auth_db_data:
+  mongo_orders_data:
+  products_db_data:
