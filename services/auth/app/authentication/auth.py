@@ -10,8 +10,9 @@ from ..db.models import User
 pwd_context = CryptContext(schemes=['argon2'], deprecated='auto')
 
 
-JWT_SECRET = 'random-security-secret'
-JWT_ALOGRITHM = 'HS256'
+JWT_SECRET = os.getenv("JWT_SECRET", "random-security-secret")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 
@@ -26,13 +27,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(subject: str)-> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {'token' : subject, 'exp' : expire}
-    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALOGRITHM)
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
     return token
 
 
 def decode_access_token(token: str):
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALOGRITHM])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
         raise ValueError('Token has expired.')
     except jwt.InvalidTokenError:

@@ -1,15 +1,12 @@
-from pydantic import BaseModel, Field, EmailStr
-
+from pydantic import BaseModel, EmailStr, Field
 
 class OrderBase(BaseModel):
     customer_email: EmailStr
     product_name: str
     amount: float
 
-
 class OrderCreate(OrderBase):
     pass
-
 
 class OrderOut(OrderBase):
     id: str = Field(alias="_id")

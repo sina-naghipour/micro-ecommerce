@@ -11,7 +11,5 @@ async def startup_event():
 
 app.include_router(router, prefix='/auth', tags=['Auth'])
 
-@app.get('/health')
-async def health_check():
-    return {'status' : 'ok'}
+
 

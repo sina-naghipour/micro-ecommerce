@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 
-engine = create_async_engine('postgresql+asyncpg://postgres:toor@db_auth:5432/ecommerce-auth')
+engine = create_async_engine('postgresql+asyncpg://postgres:toor@db_auth:5432/ecommerce_auth')
 AsyncSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 async def get_db():
