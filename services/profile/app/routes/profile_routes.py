@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from ..db.models import Profile, ProfileCreate, ProfileOut
-from ..db.db import get_db
-from ..authentication.auth import verify_token
+from app.db.db import get_db
+from app.db.service import ProfileService
+from app.db.models import ProfileCreate, ProfileOut
+from app.authentication.auth import verify_token
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
 
@@ -13,29 +13,18 @@ async def health_check():
 
 @router.post("/", response_model=ProfileOut, dependencies=[Depends(verify_token)])
 async def create_profile(profile: ProfileCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Profile).where(Profile.email == profile.email))
-    existing = result.scalar_one_or_none()
-    if existing:
-        raise HTTPException(status_code=400, detail="Profile already exists")
-    
-    new_profile = Profile(**profile.model_dump())
-    db.add(new_profile)
-    await db.commit()
-    await db.refresh(new_profile)
-    return new_profile
-
-
+    try:
+        return await ProfileService.create_profile(db, profile)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/", response_model=list[ProfileOut], dependencies=[Depends(verify_token)])
 async def list_profiles(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Profile))
-    return result.scalars().all()
+    return await ProfileService.list_profiles(db)
 
 @router.get("/{profile_id}", response_model=ProfileOut, dependencies=[Depends(verify_token)])
 async def get_profile(profile_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Profile).where(Profile.id == profile_id))
-    profile = result.scalar_one_or_none()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    return profile
-
+    try:
+        return await ProfileService.get_profile(db, profile_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

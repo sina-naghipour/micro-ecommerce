@@ -10,6 +10,3 @@ async def startup_event():
     await init_db()
 
 app.include_router(router, prefix='/auth', tags=['Auth'])
-
-
-

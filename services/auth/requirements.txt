@@ -11,3 +11,5 @@ argon2-cffi
 pytest
 pytest-asyncio
 httpx
+pydantic
+pydantic-settings

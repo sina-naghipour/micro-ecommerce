@@ -1,5 +1,7 @@
 fastapi
-uvicorn
+uvicorn[standard]
 motor
-pydantic[email]
 PyJWT
+pydantic[email]
+python-dotenv
+pydantic-settings

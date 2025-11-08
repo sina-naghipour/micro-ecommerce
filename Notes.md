@@ -15,3 +15,12 @@ up until now, we have added profile and cart basic services, none of our service
 
 ### then i will right a service called test which would test our backend api acting like a client.
 
+now, we are improving current services :
+
+## Auth
+
+adding `core/config.py` for more convenient use.
+adding `db/repository.py` to encapsulate DB access into a class, DB logic is seperate from authentication.
+
+adding `authentication/service.py` a single class handles all authentication logic.
+

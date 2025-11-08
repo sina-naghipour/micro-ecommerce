@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from ..db.db import get_db
-from ..db.models import Product
-from ..authentication.auth import verify_token
+from app.db.db import get_db
+from app.db.models import Product
+from app.authentication.auth import verify_token
 from pydantic import BaseModel
 from typing import Optional
-
+import logging
 
 router = APIRouter(prefix="/products", tags=["Products"])
-
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("product_routes")
 
 class ProductCreate(BaseModel):
     name: str
@@ -17,12 +18,14 @@ class ProductCreate(BaseModel):
     price: float
     stock: int
 
-
 class ProductOut(ProductCreate):
     id: int
     class Config:
         from_attributes = True
 
+@router.get("/health", tags=["Health"])
+async def health():
+    return {"status": "products ok"}
 
 @router.post("/", response_model=ProductOut, dependencies=[Depends(verify_token)])
 async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_db)):
@@ -30,19 +33,13 @@ async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_
     db.add(new_product)
     await db.commit()
     await db.refresh(new_product)
+    logger.info(f"Created product {new_product.name} (id={new_product.id})")
     return new_product
-
 
 @router.get("/", response_model=list[ProductOut], dependencies=[Depends(verify_token)])
 async def list_products(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Product))
     return result.scalars().all()
-
-
-@router.get("/health", tags=["Health"], dependencies=[Depends(verify_token)])
-async def health():
-    return {"status": "products ok"}
-
 
 @router.get("/{product_id}", response_model=ProductOut, dependencies=[Depends(verify_token)])
 async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
@@ -51,5 +48,3 @@ async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
-
-

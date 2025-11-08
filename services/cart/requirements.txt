@@ -1,4 +1,7 @@
 fastapi
-uvicorn
+uvicorn[standard]
 redis[asyncio]
 PyJWT
+python-dotenv
+pydantic
+pydantic-settings

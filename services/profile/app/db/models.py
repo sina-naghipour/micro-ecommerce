@@ -1,9 +1,8 @@
 from sqlalchemy import Column, Integer, String
 from .db import Base
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 
-# SQLAlchemy model
 class Profile(Base):
     __tablename__ = "profiles"
     id = Column(Integer, primary_key=True, index=True)
@@ -12,7 +11,6 @@ class Profile(Base):
     address = Column(String, nullable=True)
     phone = Column(String, nullable=True)
 
-# Pydantic models
 class ProfileCreate(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
