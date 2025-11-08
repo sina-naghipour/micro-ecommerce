@@ -1,4 +1,5 @@
 import jwt
+from jwt import ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
 import os
 from datetime import datetime, timedelta, timezone

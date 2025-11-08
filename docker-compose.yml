@@ -1,6 +1,17 @@
-version: '3.9'
-
 services:
+  # ===== Databases =====
+  
+  cart_redis:
+    image: redis:7
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   db_auth:
     image: postgres:15
     restart: always
@@ -35,6 +46,23 @@ services:
       timeout: 5s
       retries: 5
 
+  db_profile:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: toor
+      POSTGRES_DB: ecommerce_profile
+    ports:
+      - "5434:5432"
+    volumes:
+      - profile_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ecommerce_profile"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   mongo_orders:
     image: mongo:7
     restart: always
@@ -48,6 +76,10 @@ services:
       timeout: 5s
       retries: 5
 
+
+
+
+  # ===== Services =====
   auth:
     build: ./services/auth
     restart: always
@@ -64,6 +96,18 @@ services:
       db_auth:
         condition: service_healthy
 
+  cart:
+    build: ./services/cart
+    restart: always
+    ports:
+      - "8004:8004"
+    environment:
+      REDIS_URL: redis://cart_redis:6379/0
+      JWT_SECRET: random-security-secret
+      JWT_ALGORITHM: HS256
+    depends_on:
+      cart_redis:
+        condition: service_healthy
   products:
     build: ./services/products
     restart: always
@@ -80,6 +124,22 @@ services:
       db_products:
         condition: service_healthy
   
+  profile:
+    build: ./services/profile
+    restart: always
+    ports:
+      - "8003:8003"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: toor
+      POSTGRES_DB: ecommerce_profile
+      POSTGRES_HOST: db_profile
+      JWT_SECRET: random-security-secret
+      JWT_ALGORITHM: HS256
+    depends_on:
+      db_profile:
+        condition: service_healthy
+
   orders:
     build: ./services/orders
     restart: always
@@ -106,11 +166,14 @@ services:
         condition: service_started
       products:
         condition: service_started
+      profile:
+        condition: service_started
       orders:
         condition: service_started
 
+# ===== Volumes =====
 volumes:
   auth_db_data:
-  mongo_orders_data:
   products_db_data:
-
+  profile_db_data:
+  mongo_orders_data:

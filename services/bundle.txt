@@ -1,0 +1,619 @@
+
+# ===== bundle.py =====
+#!/usr/bin/env python3
+import os
+
+output_file = "bundle.txt"
+
+with open(output_file, "w", encoding="utf-8") as out:
+    for root, _, files in os.walk("."):
+        for file in files:
+            # Skip the output file itself to avoid recursion
+            if file == output_file:
+                continue
+
+            file_path = os.path.join(root, file)
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except Exception as e:
+                content = f"[Could not read file: {e}]"
+
+            rel_path = os.path.relpath(file_path, ".")
+            out.write(f"\n# ===== {rel_path} =====\n")
+            out.write(content)
+            out.write("\n# ===== END OF FILE =====\n")
+
+print(f"All files bundled into {output_file}")
+
+# ===== END OF FILE =====
+
+# ===== auth\Dockerfile =====
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./app ./app
+
+ENV PYTHONPATH=/app
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+# ===== END OF FILE =====
+
+# ===== auth\requirements.txt =====
+fastapi
+uvicorn
+sqlalchemy
+asyncpg
+passlib[bcrypt,argon2]
+fastapi-jwt-auth
+pydantic
+pydantic[email]
+bcrypt
+argon2-cffi
+pytest
+pytest-asyncio
+httpx
+# ===== END OF FILE =====
+
+# ===== auth\app\main.py =====
+from fastapi import FastAPI
+from .routes.auth_routes import router
+from .db.db import init_db
+
+
+app = FastAPI(title='Auth Service')
+
+@app.on_event("startup")
+async def startup_event():
+    await init_db()
+
+app.include_router(router, prefix='/auth', tags=['Auth'])
+
+
+
+
+# ===== END OF FILE =====
+
+# ===== auth\app\__init__.py =====
+
+# ===== END OF FILE =====
+
+# ===== auth\app\.pytest_cache\.gitignore =====
+# Created by pytest automatically.
+*
+
+# ===== END OF FILE =====
+
+# ===== auth\app\.pytest_cache\CACHEDIR.TAG =====
+Signature: 8a477f597d28d172789f06886806bc55
+# This file is a cache directory tag created by pytest.
+# For information about cache directory tags, see:
+#	https://bford.info/cachedir/spec.html
+
+# ===== END OF FILE =====
+
+# ===== auth\app\.pytest_cache\README.md =====
+# pytest cache directory #
+
+This directory contains data from the pytest's cache plugin,
+which provides the `--lf` and `--ff` options, as well as the `cache` fixture.
+
+**Do not** commit this to version control.
+
+See [the docs](https://docs.pytest.org/en/stable/how-to/cache.html) for more information.
+
+# ===== END OF FILE =====
+
+# ===== auth\app\.pytest_cache\v\cache\lastfailed =====
+{
+  "tests/auth_test.py": true
+}
+# ===== END OF FILE =====
+
+# ===== auth\app\.pytest_cache\v\cache\nodeids =====
+[]
+# ===== END OF FILE =====
+
+# ===== auth\app\authentication\auth.py =====
+import jwt
+from passlib.context import CryptContext
+import os
+from datetime import datetime, timedelta, timezone
+from ..db.db import AsyncSessionLocal
+from fastapi import HTTPException, status
+from sqlalchemy.future import select
+from ..db.models import User
+
+pwd_context = CryptContext(schemes=['argon2'], deprecated='auto')
+
+
+JWT_SECRET = os.getenv("JWT_SECRET", "random-security-secret")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def create_access_token(subject: str)-> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {'token' : subject, 'exp' : expire}
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return token
+
+
+def decode_access_token(token: str):
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise ValueError('Token has expired.')
+    except jwt.InvalidTokenError:
+        raise ValueError('Invalid token.')
+
+async def create_user(email: str, password: str):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User).where(User.email == email))
+        existing_user = result.scalars().first()
+        if existing_user:
+            raise HTTPException(
+                status_code = status.HTTP_400_BAD_REQUEST,
+                detail      = 'Email already registered.'
+            )
+            
+        user = User(email=email, password_hash=hash_password(password))
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        return user
+
+
+async def authenticate_user(email: str, password:str):
+    async with AsyncSessionLocal() as session:
+        statement = select(User).where(User.email == email)
+        result = await session.execute(statement)
+        user = result.scalars().first()
+        
+        if not user or not verify_password(password, user.password_hash):
+            raise HTTPException(
+                status_code = status.HTTP_401_UNAUTHORIZED,
+                detail      = 'Invalid credentials'
+            )
+            
+        return user
+# ===== END OF FILE =====
+
+# ===== auth\app\authentication\__pycache__\auth.cpython-312.pyc =====
+[Could not read file: 'utf-8' codec can't decode byte 0xcb in position 0: invalid continuation byte]
+# ===== END OF FILE =====
+
+# ===== auth\app\db\db.py =====
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+
+engine = create_async_engine('postgresql+asyncpg://postgres:toor@db_auth:5432/ecommerce_auth')
+AsyncSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
+
+
+Base = declarative_base()
+
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+
+# ===== END OF FILE =====
+
+# ===== auth\app\db\models.py =====
+from sqlalchemy import Column, Integer, String
+from .db import Base
+from pydantic import BaseModel, EmailStr
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserOut(BaseModel):
+    id: int
+    email: EmailStr
+
+    model_config = {
+        "from_attributes": True
+    }
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    
+# ===== END OF FILE =====
+
+# ===== auth\app\db\__pycache__\db.cpython-312.pyc =====
+[Could not read file: 'utf-8' codec can't decode byte 0xcb in position 0: invalid continuation byte]
+# ===== END OF FILE =====
+
+# ===== auth\app\db\__pycache__\models.cpython-312.pyc =====
+[Could not read file: 'utf-8' codec can't decode byte 0xcb in position 0: invalid continuation byte]
+# ===== END OF FILE =====
+
+# ===== auth\app\routes\auth_routes.py =====
+from fastapi import APIRouter
+from ..db.models import UserCreate, UserLogin, UserOut, Token
+from ..authentication import auth
+
+
+router = APIRouter()
+
+
+@router.post('/register', response_model=UserOut)
+async def register(user: UserCreate):
+    user_response = await auth.create_user(user.email, user.password)
+    return user_response
+
+
+@router.post('/login', response_model=Token)
+async def login(user: UserLogin):
+    authenticated_user = await auth.authenticate_user(user.email, user.password)
+    token = auth.create_access_token(subject=user.email)
+    return {'access_token' : token, 'token_type' : 'bearer'}
+
+
+@router.get('/health')
+async def health_check():
+    return {'status' : 'auth ok'}
+# ===== END OF FILE =====
+
+# ===== auth\app\routes\__pycache__\auth_routes.cpython-312.pyc =====
+[Could not read file: 'utf-8' codec can't decode byte 0xcb in position 0: invalid continuation byte]
+# ===== END OF FILE =====
+
+# ===== auth\app\__pycache__\main.cpython-312.pyc =====
+[Could not read file: 'utf-8' codec can't decode byte 0xcb in position 0: invalid continuation byte]
+# ===== END OF FILE =====
+
+# ===== auth\app\__pycache__\__init__.cpython-312.pyc =====
+[Could not read file: 'utf-8' codec can't decode byte 0xcb in position 0: invalid continuation byte]
+# ===== END OF FILE =====
+
+# ===== orders\Dockerfile =====
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./app ./app
+
+EXPOSE 8001
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+
+# ===== END OF FILE =====
+
+# ===== orders\requirements.txt =====
+fastapi
+uvicorn
+motor
+pydantic[email]
+jwt
+
+# ===== END OF FILE =====
+
+# ===== orders\app\main.py =====
+from fastapi import FastAPI
+from .routes.order_routes import router
+
+app = FastAPI(title="Orders Service", version="1.0.0")
+app.include_router(router)
+
+# ===== END OF FILE =====
+
+# ===== orders\app\authentication\auth.py =====
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+import os
+
+JWT_SECRET = os.getenv("JWT_SECRET", "random-security-secret")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+
+security = HTTPBearer()
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload  # contains {'token': user_email, 'exp': ...}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+# ===== END OF FILE =====
+
+# ===== orders\app\db\db.py =====
+from motor.motor_asyncio import AsyncIOMotorClient
+
+MONGO_URL = "mongodb://mongo_orders:27017"
+DATABASE_NAME = "ecommerce_orders"
+
+_client = None
+
+def get_client() -> AsyncIOMotorClient:
+    global _client
+    if _client is None:
+        _client = AsyncIOMotorClient(MONGO_URL)
+    return _client
+
+def get_db():
+    client = get_client()
+    return client[DATABASE_NAME]
+
+# ===== END OF FILE =====
+
+# ===== orders\app\db\models.py =====
+from pydantic import BaseModel, EmailStr, Field
+
+class OrderBase(BaseModel):
+    customer_email: EmailStr
+    product_name: str
+    amount: float
+
+class OrderCreate(OrderBase):
+    pass
+
+class OrderOut(OrderBase):
+    id: str = Field(alias="_id")
+
+    class Config:
+        populate_by_name = True
+        from_attributes = True
+
+# ===== END OF FILE =====
+
+# ===== orders\app\routes\order_routes.py =====
+from fastapi import APIRouter, HTTPException, status, Depends
+from bson import ObjectId
+from ..db.db import get_db
+from ..authentication.auth import verify_token
+from ..db.models import OrderCreate, OrderOut
+
+
+router = APIRouter(prefix="/orders", tags=["Orders"])
+
+
+@router.post("/", response_model=OrderOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(verify_token)])
+async def create_order(order: OrderCreate):
+    db = get_db()
+    order_data = order.model_dump()
+    result = await db.orders.insert_one(order_data)
+    created_order = await db.orders.find_one({"_id": result.inserted_id})
+    created_order["_id"] = str(created_order["_id"])
+    return created_order
+
+
+@router.get("/", response_model=list[OrderOut], dependencies=[Depends(verify_token)])
+async def list_orders():
+    db = get_db()
+    orders = []
+    async for order in db.orders.find():
+        order["_id"] = str(order["_id"])
+        orders.append(order)
+    return orders
+
+
+@router.get("/health", tags=["Health"], dependencies=[Depends(verify_token)])
+async def health():
+    return {"status": "orders ok"}
+
+
+@router.get("/{order_id}", response_model=OrderOut, dependencies=[Depends(verify_token)])
+async def get_order(order_id: str):
+    if not ObjectId.is_valid(order_id):
+        raise HTTPException(status_code=400, detail="Invalid order ID")
+
+    db = get_db()
+    order = await db.orders.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order["_id"] = str(order["_id"])
+    return order
+
+
+
+
+# ===== END OF FILE =====
+
+# ===== products\Dockerfile =====
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./app ./app
+
+EXPOSE 8002
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+
+# ===== END OF FILE =====
+
+# ===== products\requirements.txt =====
+fastapi
+uvicorn
+sqlalchemy
+asyncpg
+pydantic
+jwt
+# ===== END OF FILE =====
+
+# ===== products\app\main.py =====
+from fastapi import FastAPI
+from .routes.product_routes import router
+from .db.db import init_db
+
+app = FastAPI(title="Products Service", version="1.0.0")
+app.include_router(router)
+
+@app.on_event("startup")
+async def startup():
+    await init_db()
+
+# ===== END OF FILE =====
+
+# ===== products\app\authentication\auth.py =====
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+import os
+
+JWT_SECRET = os.getenv("JWT_SECRET", "random-security-secret")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+
+security = HTTPBearer()
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload  # contains {'token': user_email, 'exp': ...}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+# ===== END OF FILE =====
+
+# ===== products\app\db\db.py =====
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+DATABASE_URL = "postgresql+asyncpg://postgres:toor@db_products:5432/ecommerce_products"
+
+engine = create_async_engine(DATABASE_URL, echo=False, future=True)
+AsyncSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+Base = declarative_base()
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
+
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+# ===== END OF FILE =====
+
+# ===== products\app\db\models.py =====
+from sqlalchemy import Column, Integer, String, Float
+from .db import Base
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(String)
+    price = Column(Float, nullable=False)
+    stock = Column(Integer, nullable=False)
+
+# ===== END OF FILE =====
+
+# ===== products\app\routes\product_routes.py =====
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from ..db.db import get_db
+from ..db.models import Product
+from ..authentication.auth import verify_token
+from pydantic import BaseModel
+from typing import Optional
+
+
+router = APIRouter(prefix="/products", tags=["Products"])
+
+
+class ProductCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    price: float
+    stock: int
+
+
+class ProductOut(ProductCreate):
+    id: int
+    class Config:
+        from_attributes = True
+
+
+@router.post("/", response_model=ProductOut, dependencies=[Depends(verify_token)])
+async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_db)):
+    new_product = Product(**product.model_dump())
+    db.add(new_product)
+    await db.commit()
+    await db.refresh(new_product)
+    return new_product
+
+
+@router.get("/", response_model=list[ProductOut], dependencies=[Depends(verify_token)])
+async def list_products(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Product))
+    return result.scalars().all()
+
+
+@router.get("/health", tags=["Health"], dependencies=[Depends(verify_token)])
+async def health():
+    return {"status": "products ok"}
+
+
+@router.get("/{product_id}", response_model=ProductOut, dependencies=[Depends(verify_token)])
+async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Product).where(Product.id == product_id))
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return product
+
+
+
+# ===== END OF FILE =====

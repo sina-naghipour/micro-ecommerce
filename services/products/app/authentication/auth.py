@@ -1,6 +1,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
+from jwt import ExpiredSignatureError, InvalidTokenError
 import os
 
 JWT_SECRET = os.getenv("JWT_SECRET", "random-security-secret")

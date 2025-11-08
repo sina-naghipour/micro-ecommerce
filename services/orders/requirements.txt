@@ -2,4 +2,4 @@ fastapi
 uvicorn
 motor
 pydantic[email]
-jwt
+PyJWT

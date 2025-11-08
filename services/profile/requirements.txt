@@ -2,12 +2,8 @@ fastapi
 uvicorn
 sqlalchemy
 asyncpg
-passlib[bcrypt,argon2]
-fastapi-jwt-auth
-pydantic
 pydantic[email]
-bcrypt
-argon2-cffi
+PyJWT
 pytest
 pytest-asyncio
 httpx
