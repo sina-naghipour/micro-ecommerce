@@ -9,3 +9,9 @@ Products & Orders verify tokens using the Auth service’s public key/secret
 Fast (no extra network hop), scalable, microservice-friendly
 Need shared secret/public key (via env vars or config)
 
+up until now, we have added profile and cart basic services, none of our services has been tested yet.
+
+### the next step is to first make existing services more comprehensive and more convinient.
+
+### then i will right a service called test which would test our backend api acting like a client.
+
